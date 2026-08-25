@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ONLY enable this after Apple has granted the Critical Alerts entitlement
+         to the signing team/profile used for this app. -->
+    <key>com.apple.developer.usernotifications.critical-alerts</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,70 @@
+name: RJUltraReminders
+
+options:
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    SWIFT_EMIT_LOC_STRINGS: YES
+
+targets:
+  RJUltraReminders:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes:
+          - Info.plist
+          - Resources
+      - path: Shared
+    resources:
+      - path: App/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.ultrareminders
+        PRODUCT_NAME: RJUltraReminders
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - target: RJUltraRemindersWidgets
+        embed: true
+        codeSign: false
+
+  RJUltraRemindersWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: WidgetExtension
+        excludes:
+          - Info.plist
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.ultrareminders.widgets
+        PRODUCT_NAME: RJUltraRemindersWidgets
+        INFOPLIST_FILE: WidgetExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+
+schemes:
+  RJUltraReminders:
+    build:
+      targets:
+        RJUltraReminders: all
+        RJUltraRemindersWidgets: all
+    run:
+      config: Debug
+    archive:
+      config: Release
