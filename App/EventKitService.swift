@@ -52,7 +52,7 @@ final class EventKitService {
     ) async {
         refreshAuthorization()
 
-        if eventAuthorization == .fullAccess || eventAuthorization == .authorized {
+        if eventAuthorization == .fullAccess {
             let predicate = eventStore.predicateForEvents(
                 withStart: startDate,
                 end: endDate,
@@ -74,7 +74,7 @@ final class EventKitService {
             events = []
         }
 
-        if reminderAuthorization == .fullAccess || reminderAuthorization == .authorized {
+        if reminderAuthorization == .fullAccess {
             let predicate = eventStore.predicateForReminders(in: nil)
             let reminders = await withCheckedContinuation { continuation in
                 eventStore.fetchReminders(matching: predicate) { values in
@@ -102,7 +102,7 @@ final class EventKitService {
         endDate: Date,
         allDay: Bool
     ) async throws {
-        if eventAuthorization != .fullAccess && eventAuthorization != .authorized {
+        if eventAuthorization != .fullAccess {
             guard await requestEventAccess() else {
                 throw EventKitServiceError.eventsDenied
             }
@@ -122,7 +122,7 @@ final class EventKitService {
     }
 
     func exportReminder(_ item: ReminderItem) async throws -> String {
-        if reminderAuthorization != .fullAccess && reminderAuthorization != .authorized {
+        if reminderAuthorization != .fullAccess {
             guard await requestReminderAccess() else {
                 throw EventKitServiceError.remindersDenied
             }

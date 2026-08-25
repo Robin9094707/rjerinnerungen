@@ -25,10 +25,7 @@ targets:
       - path: App
         excludes:
           - Info.plist
-          - Resources
       - path: Shared
-    resources:
-      - path: App/Resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.zeitzentrale

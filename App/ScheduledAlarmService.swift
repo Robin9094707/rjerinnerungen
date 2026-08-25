@@ -57,11 +57,6 @@ final class ScheduledAlarmService {
             kind: .scheduledAlarm,
             fireDate: alarm.nextFireDate()
         )
-        let stopButton = AlarmButton(
-            text: "Stoppen",
-            textColor: .white,
-            systemImageName: "stop.circle.fill"
-        )
         let snoozeButton = AlarmButton(
             text: "Snooze",
             textColor: alarm.accent.color,
@@ -69,7 +64,6 @@ final class ScheduledAlarmService {
         )
         let alert = AlarmPresentation.Alert(
             title: LocalizedStringResource(stringLiteral: alarm.title),
-            stopButton: stopButton,
             secondaryButton: snoozeButton,
             secondaryButtonBehavior: .countdown
         )

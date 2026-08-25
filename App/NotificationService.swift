@@ -71,7 +71,7 @@ final class NotificationService {
     func requestAuthorization() async -> Bool {
         do {
             let allowed = try await center.requestAuthorization(
-                options: [.alert, .badge, .sound, .timeSensitive]
+                options: [.alert, .badge, .sound]
             )
             await refreshAuthorization()
             DebugLogger.shared.log("Notification authorization: \(allowed)")

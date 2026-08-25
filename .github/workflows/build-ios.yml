@@ -85,6 +85,11 @@ jobs:
             echo "No main .app found."
             exit 1
           fi
+          test -f "$APP/Assets.car"
+          test -f "$APP/glass_chime.wav"
+          test -f "$APP/soft_bell.wav"
+          test -f "$APP/digital_pulse.wav"
+          test -d "$APP/PlugIns/RJZeitZentraleWidgets.appex"
           rm -rf Payload
           mkdir -p Payload
           cp -R "$APP" Payload/

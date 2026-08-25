@@ -153,10 +153,10 @@ struct SettingsView: View {
     }
 
     private var hasEventAccess: Bool {
-        eventService.eventAuthorization == .fullAccess || eventService.eventAuthorization == .authorized
+        eventService.eventAuthorization == .fullAccess
     }
     private var hasReminderAccess: Bool {
-        eventService.reminderAuthorization == .fullAccess || eventService.reminderAuthorization == .authorized
+        eventService.reminderAuthorization == .fullAccess
     }
     private var eventAccessText: String { hasEventAccess ? "Verbunden" : "Verbinden" }
     private var reminderAccessText: String { hasReminderAccess ? "Verbunden" : "Verbinden" }

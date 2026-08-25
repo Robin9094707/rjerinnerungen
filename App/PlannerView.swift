@@ -77,8 +77,7 @@ struct PlannerView: View {
                 )
             }
 
-            if eventService.eventAuthorization != .fullAccess
-                && eventService.eventAuthorization != .authorized {
+            if eventService.eventAuthorization != .fullAccess {
                 permissionCard
             }
 
@@ -149,8 +148,7 @@ struct PlannerView: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 22))
             }
 
-            if eventService.reminderAuthorization == .fullAccess
-                || eventService.reminderAuthorization == .authorized {
+            if eventService.reminderAuthorization == .fullAccess {
                 systemReminders
             } else {
                 Button {
