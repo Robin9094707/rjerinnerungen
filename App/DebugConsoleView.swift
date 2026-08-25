@@ -1,34 +1,47 @@
 import SwiftUI
 
 struct DebugConsoleView: View {
-    @State private var refreshID = UUID()
+    @Environment(\.dismiss) private var dismiss
+    @State private var logger = DebugLogger.shared
 
     var body: some View {
-        List {
-            Section {
-                if DebugLogger.shared.entries.isEmpty {
-                    Text("Noch keine Debug-Einträge.").foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(DebugLogger.shared.entries.reversed().enumerated()), id: \.offset) { _, entry in
-                        Text(entry).font(.caption.monospaced()).textSelection(.enabled)
+        NavigationStack {
+            List {
+                Section {
+                    LabeledContent("Log-Datei", value: logger.logURL.lastPathComponent)
+                    ShareLink(item: logger.logURL) {
+                        Label("Log teilen", systemImage: "square.and.arrow.up")
                     }
                 }
-            } header: {
-                Text("Lokales Diagnoseprotokoll")
-            } footer: {
-                Text("Es werden keine Passwörter, Tokens oder privaten Schlüssel protokolliert.")
+
+                Section("Live Log") {
+                    if logger.lines.isEmpty {
+                        ContentUnavailableView(
+                            "Keine Logs",
+                            systemImage: "ladybug",
+                            description: Text("Timer- und AlarmKit-Ereignisse erscheinen hier.")
+                        )
+                    } else {
+                        ForEach(Array(logger.lines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(.caption2, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
             }
-        }
-        .id(refreshID)
-        .navigationTitle("Debug")
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                ShareLink(item: DebugLogger.shared.exportText) { Image(systemName: "square.and.arrow.up") }
-                Button(role: .destructive) {
-                    DebugLogger.shared.clear()
-                    refreshID = UUID()
-                } label: { Image(systemName: "trash") }
+            .navigationTitle("Debug")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fertig") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Leeren", role: .destructive) {
+                        logger.clear()
+                    }
+                }
             }
+            .onAppear { logger.load() }
         }
     }
 }

@@ -1,203 +1,172 @@
 import Foundation
-import UserNotifications
+import Observation
+@preconcurrency import UserNotifications
 
-struct NotificationStatusSnapshot {
-    var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    var alertSetting: UNNotificationSetting = .notSupported
-    var soundSetting: UNNotificationSetting = .notSupported
-    var timeSensitiveSetting: UNNotificationSetting = .notSupported
-    var criticalAlertSetting: UNNotificationSetting = .notSupported
+extension Notification.Name {
+    static let rjNotificationAction = Notification.Name("RJNotificationAction")
+}
 
-    var isAuthorized: Bool {
-        authorizationStatus == .authorized || authorizationStatus == .provisional || authorizationStatus == .ephemeral
+enum RJNotificationAction: String {
+    case complete = "RJ_COMPLETE"
+    case snooze = "RJ_SNOOZE"
+    case open = "RJ_OPEN"
+}
+
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound, .badge]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let rawID = response.notification.request.content.userInfo["reminderID"] as? String
+        NotificationCenter.default.post(
+            name: .rjNotificationAction,
+            object: nil,
+            userInfo: [
+                "action": response.actionIdentifier,
+                "reminderID": rawID ?? ""
+            ]
+        )
     }
 }
 
-actor NotificationService {
+@MainActor
+@Observable
+final class NotificationService {
     static let shared = NotificationService()
 
-    static let categoryIdentifier = "RJ_REMINDER"
-    static let doneAction = "RJ_DONE"
-    static let snooze5Action = "RJ_SNOOZE_5"
-    static let snooze15Action = "RJ_SNOOZE_15"
-    static let snooze60Action = "RJ_SNOOZE_60"
-
     private let center = UNUserNotificationCenter.current()
+    private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
 
-    func requestAuthorization() async throws -> Bool {
-        try await center.requestAuthorization(options: [.alert, .badge, .sound, .providesAppNotificationSettings])
+    func configure() {
+        let complete = UNNotificationAction(
+            identifier: RJNotificationAction.complete.rawValue,
+            title: "Erledigt",
+            options: []
+        )
+        let snooze = UNNotificationAction(
+            identifier: RJNotificationAction.snooze.rawValue,
+            title: "10 Minuten später",
+            options: []
+        )
+        let category = UNNotificationCategory(
+            identifier: "RJ_REMINDER",
+            actions: [complete, snooze],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        center.setNotificationCategories([category])
     }
 
-    func requestCriticalAuthorization() async throws -> Bool {
-        try await center.requestAuthorization(options: [.criticalAlert])
+    func refreshAuthorization() async {
+        authorizationStatus = await center.notificationSettings().authorizationStatus
     }
 
-    func status() async -> NotificationStatusSnapshot {
-        let settings = await center.notificationSettings()
-        return NotificationStatusSnapshot(
-            authorizationStatus: settings.authorizationStatus,
-            alertSetting: settings.alertSetting,
-            soundSetting: settings.soundSetting,
-            timeSensitiveSetting: settings.timeSensitiveSetting,
-            criticalAlertSetting: settings.criticalAlertSetting
+    func requestAuthorization() async -> Bool {
+        do {
+            let allowed = try await center.requestAuthorization(
+                options: [.alert, .badge, .sound, .timeSensitive]
+            )
+            await refreshAuthorization()
+            DebugLogger.shared.log("Notification authorization: \(allowed)")
+            return allowed
+        } catch {
+            DebugLogger.shared.log("Notification authorization error: \(error)")
+            return false
+        }
+    }
+
+    func schedule(_ reminder: ReminderItem) async throws {
+        cancel(reminder.id)
+        guard reminder.notificationEnabled,
+              !reminder.completed,
+              let dueDate = reminder.dueDate else { return }
+
+        if authorizationStatus == .notDetermined {
+            _ = await requestAuthorization()
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = reminder.title
+        content.body = reminder.details.isEmpty ? "Deine Erinnerung ist jetzt fällig." : reminder.details
+        content.sound = .default
+        content.badge = 1
+        content.categoryIdentifier = "RJ_REMINDER"
+        content.threadIdentifier = "RJ_REMINDERS"
+        content.targetContentIdentifier = reminder.id.uuidString
+        content.userInfo = ["reminderID": reminder.id.uuidString]
+        content.interruptionLevel = reminder.priority == .high || reminder.priority == .urgent
+            ? .timeSensitive
+            : .active
+
+        let calendar = Calendar.current
+        let trigger: UNCalendarNotificationTrigger
+        switch reminder.recurrence {
+        case .never:
+            guard dueDate > .now else { return }
+            let components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: dueDate
+            )
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        case .daily:
+            let components = calendar.dateComponents([.hour, .minute], from: dueDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        case .weekly:
+            let components = calendar.dateComponents([.weekday, .hour, .minute], from: dueDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        case .monthly:
+            let components = calendar.dateComponents([.day, .hour, .minute], from: dueDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        }
+
+        try await center.add(
+            UNNotificationRequest(
+                identifier: identifier(for: reminder.id),
+                content: content,
+                trigger: trigger
+            )
+        )
+        DebugLogger.shared.log("Reminder notification scheduled: \(reminder.id)")
+    }
+
+    func snooze(_ reminder: ReminderItem, minutes: Int = 10) async throws {
+        let content = UNMutableNotificationContent()
+        content.title = reminder.title
+        content.body = "Noch einmal erinnert – \(minutes) Minuten später."
+        content.sound = .default
+        content.categoryIdentifier = "RJ_REMINDER"
+        content.userInfo = ["reminderID": reminder.id.uuidString]
+        content.interruptionLevel = reminder.priority == .urgent ? .timeSensitive : .active
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: TimeInterval(max(1, minutes) * 60),
+            repeats: false
+        )
+        try await center.add(
+            UNNotificationRequest(
+                identifier: snoozeIdentifier(for: reminder.id),
+                content: content,
+                trigger: trigger
+            )
         )
     }
 
-    func schedule(_ reminder: RJReminder) async throws {
-        await cancel(reminderID: reminder.id)
-        guard reminder.notificationEnabled, reminder.hasDueDate, !reminder.isCompleted else { return }
-
-        let settings = await center.notificationSettings()
-        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
-            throw NotificationError.permissionMissing
-        }
-
-        let criticalAllowed = settings.criticalAlertSetting == .enabled
-        let offsets = ([0] + reminder.preAlertMinutes.filter { $0 > 0 }).sorted()
-        var requestCount = 0
-
-        for offset in offsets {
-            let fireDate = reminder.dueDate.addingTimeInterval(TimeInterval(-offset * 60))
-            if reminder.recurrence == .none && fireDate <= .now { continue }
-
-            let triggers = makeTriggers(for: reminder.recurrence, fireDate: fireDate)
-            for (index, trigger) in triggers.enumerated() {
-                guard requestCount < 10 else { break }
-                let content = makeContent(for: reminder, offsetMinutes: offset, criticalAllowed: criticalAllowed)
-                let identifier = "rj.reminder.\(reminder.id.uuidString).\(offset).\(index)"
-                try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
-                requestCount += 1
-            }
-        }
-
-        let scheduledRequestCount = requestCount
-        let reminderID = reminder.id.uuidString
-        await MainActor.run {
-            DebugLogger.shared.log("Scheduled \(scheduledRequestCount) notification request(s) for \(reminderID)")
-        }
-    }
-
-    func scheduleSnooze(from content: UNNotificationContent, minutes: Int) async throws {
-        guard let mutable = content.mutableCopy() as? UNMutableNotificationContent else { return }
-        mutable.subtitle = "Erneut erinnert nach \(minutes) Min."
-        mutable.userInfo["snoozed"] = true
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(minutes, 1) * 60), repeats: false)
-        let request = UNNotificationRequest(identifier: "rj.snooze.\(UUID().uuidString)", content: mutable, trigger: trigger)
-        try await center.add(request)
-    }
-
-    func scheduleTest(priority: ReminderPriority) async throws {
-        let settings = await center.notificationSettings()
-        let allowed = settings.criticalAlertSetting == .enabled
-        let sample = RJReminder(title: "RJ Ultra Test", notes: "So klingt eine \(priority.title)-Erinnerung.", dueDate: .now.addingTimeInterval(4), priority: priority)
-        let content = makeContent(for: sample, offsetMinutes: 0, criticalAllowed: allowed)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)
-        try await center.add(UNNotificationRequest(identifier: "rj.test.\(UUID().uuidString)", content: content, trigger: trigger))
-    }
-
-    func cancel(reminderID: UUID) async {
-        let pending = await center.pendingNotificationRequests()
-        let prefix = "rj.reminder.\(reminderID.uuidString)."
-        let ids = pending.map(\.identifier).filter { $0.hasPrefix(prefix) }
+    func cancel(_ id: UUID) {
+        let ids = [identifier(for: id), snoozeIdentifier(for: id)]
         center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
-    func pendingCount() async -> Int {
-        let requests = await center.pendingNotificationRequests()
-        return requests.count
+    func clearBadge() {
+        center.setBadgeCount(0)
     }
 
-    private func makeContent(for reminder: RJReminder, offsetMinutes: Int, criticalAllowed: Bool) -> UNMutableNotificationContent {
-        let content = UNMutableNotificationContent()
-        content.title = reminder.title
-        content.body = reminder.notes.isEmpty ? bodyText(for: reminder, offsetMinutes: offsetMinutes) : reminder.notes
-        content.categoryIdentifier = Self.categoryIdentifier
-        content.threadIdentifier = "rj-reminders"
-        content.userInfo = [
-            "reminderID": reminder.id.uuidString,
-            "snoozeMinutes": reminder.snoozeMinutes,
-            "priority": reminder.priority.rawValue
-        ]
-        content.badge = 1
-        content.relevanceScore = relevanceScore(for: reminder.priority)
-
-        switch reminder.priority {
-        case .low:
-            content.interruptionLevel = .passive
-            content.sound = nil
-        case .normal, .important:
-            content.interruptionLevel = .active
-            content.sound = UNNotificationSound(named: UNNotificationSoundName("rj_chime.wav"))
-        case .high, .urgent:
-            content.interruptionLevel = .timeSensitive
-            content.sound = UNNotificationSound(named: UNNotificationSoundName("rj_urgent.wav"))
-        case .ultra:
-            if criticalAllowed {
-                content.interruptionLevel = .critical
-                content.sound = UNNotificationSound.criticalSoundNamed(UNNotificationSoundName("rj_ultra.wav"), withAudioVolume: 1.0)
-            } else {
-                content.interruptionLevel = .timeSensitive
-                content.sound = UNNotificationSound(named: UNNotificationSoundName("rj_ultra.wav"))
-            }
-        }
-        return content
-    }
-
-    private func bodyText(for reminder: RJReminder, offsetMinutes: Int) -> String {
-        if offsetMinutes > 0 {
-            return "In \(offsetMinutes) Minuten • \(reminder.category.title)"
-        }
-        return reminder.recurrence == .none ? reminder.category.title : "\(reminder.category.title) • \(reminder.recurrence.title)"
-    }
-
-    private func relevanceScore(for priority: ReminderPriority) -> Double {
-        switch priority {
-        case .low: 0.1
-        case .normal: 0.3
-        case .important: 0.5
-        case .high: 0.75
-        case .urgent: 0.9
-        case .ultra: 1.0
-        }
-    }
-
-    private func makeTriggers(for recurrence: ReminderRecurrence, fireDate: Date) -> [UNNotificationTrigger] {
-        let calendar = Calendar.current
-        switch recurrence {
-        case .none:
-            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
-            return [UNCalendarNotificationTrigger(dateMatching: components, repeats: false)]
-        case .daily:
-            let components = calendar.dateComponents([.hour, .minute], from: fireDate)
-            return [UNCalendarNotificationTrigger(dateMatching: components, repeats: true)]
-        case .weekdays:
-            let time = calendar.dateComponents([.hour, .minute], from: fireDate)
-            return (2...6).map { weekday in
-                var components = DateComponents()
-                components.weekday = weekday
-                components.hour = time.hour
-                components.minute = time.minute
-                return UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-            }
-        case .weekly:
-            let components = calendar.dateComponents([.weekday, .hour, .minute], from: fireDate)
-            return [UNCalendarNotificationTrigger(dateMatching: components, repeats: true)]
-        case .monthly:
-            let components = calendar.dateComponents([.day, .hour, .minute], from: fireDate)
-            return [UNCalendarNotificationTrigger(dateMatching: components, repeats: true)]
-        case .yearly:
-            let components = calendar.dateComponents([.month, .day, .hour, .minute], from: fireDate)
-            return [UNCalendarNotificationTrigger(dateMatching: components, repeats: true)]
-        }
-    }
-}
-
-enum NotificationError: LocalizedError {
-    case permissionMissing
-
-    var errorDescription: String? {
-        switch self {
-        case .permissionMissing: "Benachrichtigungen sind für RJ Ultra Erinnerungen nicht freigegeben."
-        }
-    }
+    private func identifier(for id: UUID) -> String { "reminder-\(id.uuidString)" }
+    private func snoozeIdentifier(for id: UUID) -> String { "reminder-\(id.uuidString)-snooze" }
 }

@@ -1,8 +1,11 @@
-.DS_Store
-.build/
-DerivedData/
+.tools/
+.rj-derived-data/
 .github-derived/
-*.xcodeproj
+.github-tests/
 Payload/
 *.ipa
 *.log
+DerivedData/
+build/
+*.xcodeproj/xcuserdata/
+.DS_Store

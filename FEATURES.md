@@ -1,73 +1,56 @@
-# Features
+# Funktionsumfang 1.0
 
-## Erinnerungen
+## Zentrale
 
-- 6 Prioritäten: Niedrig, Normal, Wichtig, Hoch, Dringend, Ultra
-- Kategorien und freie Tags
-- Notizen
-- Ohne Termin oder mit Datum/Uhrzeit
-- Wiederholung: täglich, Mo–Fr, wöchentlich, monatlich, jährlich
-- Vorwarnungen: 5 / 10 / 15 / 30 / 60 / 120 Minuten oder 1 Tag
-- Standard-Snooze pro Erinnerung
-- Suche nach Titel, Notiz und Tags
-- Filter für offen, erledigt, alle und Ultra/Dringend
+- tageszeitabhängige Begrüßung
+- Live-Datum und Uhrzeit
+- Kennzahlen für Erinnerungen, Timer, Notizen und Wecker
+- Schnellaktionen für alle Kerntypen
+- nächste Fälligkeit und aktiver Timer direkt auf dem Dashboard
 
-## Notifications
+## Erinnerungen und Kalender
 
-- lokale iOS-Notifications
-- Passive / Active / Time Sensitive / Critical-Fallback je Priorität
-- eigene Sounds für normale, dringende und Ultra-Erinnerungen
-- Aktionen direkt aus der Notification:
-  - Erledigt
-  - +5 Minuten
-  - +15 Minuten
-  - +1 Stunde
-- Badge wird beim Öffnen der App zurückgesetzt
-- Testnotification aus den Einstellungen
-- Notification Health / Pending-Count
-- Neuaufbau der Notification-Planung
+- Titel, Details, Termin, Uhrzeit und Priorität
+- einmalige, tägliche, wöchentliche und monatliche Wiederholung
+- normale oder zeitkritische lokale Benachrichtigung
+- optionaler AlarmKit-Systemwecker für einmalige wichtige Termine
+- Aktionen „Erledigt“ und „10 Minuten später“ direkt aus dem Hinweis
+- Monatsraster mit Markierungen und Tagesagenda
+- Apple-Kalender opt-in lesen
+- Einträge opt-in zu Apple Erinnerungen exportieren
 
-## Live Activity / Dynamic Island
+## Wecker
 
-- optional pro Erinnerung
-- Countdown
-- Titel, Priorität und Untertitel
-- Lock Screen
-- Dynamic Island compact / expanded / minimal
-- bewusster Start aus der Detailansicht
+- einmalig oder an frei wählbaren Wochentagen
+- AlarmKit-Systemdarstellung und Systemton
+- Snooze von 1 bis 30 Minuten
+- Akzentfarbe und optionale App-Töne
+- Aktivieren, deaktivieren, bearbeiten und löschen
+- Lock Screen, Dynamic Island und StandBy über die Alarm-Live-Activity
 
-## Apple Erinnerungen
+## Timer
 
-- EventKit Vollzugriff erst nach Nutzerfreigabe
-- Import offener Apple-Erinnerungen
-- Duplikatschutz über `calendarItemIdentifier`
-- Export einzelner RJ-Erinnerungen zurück zu Apple Erinnerungen
-- einfache Übernahme von Priorität und Wiederholung
+- mehrere parallele Timer
+- Pause, Fortsetzen, Stoppen, Neustarten und +1 Minute
+- Presets, Favoriten und Verlauf
+- AlarmKit-Persistenz über App-Neustarts
+- Live Activity, Dynamic Island, Widget, Control Center und Siri
 
-## Backup
+## Notizen
 
-- komplettes JSON-Backup
-- JSON-Restore
-- ISO-8601-Datumsformat
-- konfliktarmer Import über UUID
+- Volltextsuche
+- anheften
+- Farbcodierung
+- automatische Zeitstempel
+- responsive Kartenansicht für iPhone und iPad
 
-## Siri & Kurzbefehle
+## Qualität und Diagnose
 
-- App Intent „Schnelle RJ-Erinnerung“
-- Titel + Minuten + Priorität
-- App Shortcut mit Siri-Phrasen
-- Intent legt die Notification sofort an und synchronisiert den Datensatz beim nächsten App-Start in SwiftData
-
-## UI/Qualität
-
-- SwiftUI
-- SwiftData
-- iOS-26-Liquid-Glass mit Material-Fallback auf älteren unterstützten Systemen
-- Dark Mode
-- Dynamic Type
-- VoiceOver-freundliche Labels
-- SF Symbols
-- Haptics
-- Charts/Insights
-- Empty States
-- Debug-Konsole
+- Liquid Glass und adaptive Farben
+- Dark Mode und Dynamic Type
+- VoiceOver-Beschriftungen
+- lokale atomische JSON-Speicherung mit Dateischutz
+- vollständiger Datenexport
+- persistente Debug-Konsole
+- Onboarding und differenzierte Permission States
+- Unit-Tests im GitHub-Workflow

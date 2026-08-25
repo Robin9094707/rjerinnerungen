@@ -1,41 +1,38 @@
 # Build Notes
 
-## GitHub
-
-Der Workflow ist absichtlich nahe an der bereits erprobten RJ-UltraTimer-Referenz gehalten:
+## Reproduzierter Buildpfad
 
 ```text
 macos-26
-→ Xcode 26.5
+→ /Applications/Xcode_26.5.app
 → XcodeGen
+→ Unit Tests im iPhone-17-Pro-Max-Simulator (iOS 26.5)
 → Release / iphoneos / generic iOS device
 → CODE_SIGNING_ALLOWED=NO
-→ Payload/RJ Ultra Erinnerungen.app
-→ RJ-Ultra-Reminders-unsigned.ipa
+→ Payload/RJ ZeitZentrale.app
+→ RJ-ZeitZentrale-unsigned.ipa
 ```
 
-Bei einem Buildfehler wird `RJ-Ultra-Reminders-build.log` automatisch als Artifact hochgeladen.
+## Bundle-IDs
 
-## Bundle IDs
+- App: `eu.rjuhas.zeitzentrale`
+- Widget/Live Activity: `eu.rjuhas.zeitzentrale.widgets`
+- Tests: `eu.rjuhas.zeitzentrale.tests`
 
-- App: `eu.rjuhas.ultrareminders`
-- Live Activity Extension: `eu.rjuhas.ultrareminders.widgets`
+## Signierung
 
-## Signing
-
-Die Projektquelle enthält absichtlich keine Team-ID, Zertifikate oder Provisioning Profiles. Der externe Signaturdienst muss App und eingebettete `.appex` korrekt signieren.
+Die GitHub-IPA ist absichtlich unsigniert. Der spätere Signierer muss sowohl
+die Haupt-App als auch `RJZeitZentraleWidgets.appex` signieren. AlarmKit,
+ActivityKit und WidgetKit benötigen in diesem Projekt kein proprietäres Secret.
 
 ## Critical Alerts
 
-Nicht standardmäßig als Entitlement eingebettet. Siehe `CriticalAlerts.entitlements.example` und README.
+Das Entitlement `com.apple.developer.usernotifications.critical-alerts` ist
+nicht enthalten. Es wird von Apple nur nach Einzelfreigabe ausgestellt und darf
+nicht als allgemein verfügbare Funktion vorausgesetzt werden.
 
-## APIs
+## Workflow
 
-Das Deployment Target bleibt bei iOS 18.0. Liquid Glass wird mit `#available(iOS 26.0, *)` gekapselt. Dadurch bleibt die App auf iOS 18+ lauffähig, während ein Build mit Xcode 26.5 die neue Darstellung nutzen kann.
-
-## Build Fix – 2026-08-25
-
-- `QuickReminderIntents.swift`: App-Intents parameter summary corrected to use proper parameter key-path interpolation (`\(\.$parameter)`).
-- Complete-project release; no patch ZIP required.
-- Swift syntax parse, plist parsing and `project.yml` YAML parsing validated before packaging.
-
+Der finale Workflow ist manuell über `workflow_dispatch` startbar. Während der
+ersten automatisierten Validierung kann zusätzlich ein Push-Trigger vorhanden
+sein; vor der finalen Übergabe wird dieser entfernt.

@@ -1,203 +1,163 @@
+import AlarmKit
 import EventKit
-import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 import UserNotifications
 
 struct SettingsView: View {
-    @Query(sort: \RJReminder.dueDate, order: .forward) private var reminders: [RJReminder]
-    @Environment(\.modelContext) private var modelContext
-    @Environment(ReminderCoordinator.self) private var coordinator
+    @Environment(AppDataStore.self) private var appStore
+    @Environment(TimerStore.self) private var timerStore
 
-    @State private var testPriority: ReminderPriority = .high
-    @State private var showingExporter = false
-    @State private var exportDocument = ReminderBackupDocument(backup: ReminderBackup(reminders: []))
-    @State private var showingImporter = false
-    @State private var isImportingApple = false
+    @AppStorage("hapticsEnabled") private var hapticsEnabled = true
+    @AppStorage("keepScreenAwake") private var keepScreenAwake = false
+    @AppStorage("defaultSound") private var defaultSound = "glass_chime.wav"
+    @AppStorage("didCompleteOnboarding") private var didCompleteOnboarding = true
+
+    @State private var alarmService = AlarmKitService.shared
+    @State private var notificationService = NotificationService.shared
+    @State private var eventService = EventKitService.shared
+    @State private var showDebug = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Benachrichtigungen") {
-                    statusRow("Berechtigung", value: authorizationText(coordinator.notificationStatus.authorizationStatus), symbol: "bell.badge")
-                    statusRow("Time Sensitive", value: settingText(coordinator.notificationStatus.timeSensitiveSetting), symbol: "exclamationmark.triangle")
-                    statusRow("Critical Alerts", value: settingText(coordinator.notificationStatus.criticalAlertSetting), symbol: "bolt.shield")
-                    statusRow("Geplante Requests", value: "\(coordinator.pendingNotificationCount)", symbol: "calendar.badge.clock")
-
-                    Button("Benachrichtigungen erlauben") {
-                        Task { await coordinator.requestNotifications() }
-                    }
-
-                    Button("Critical-Alert-Zugriff anfragen") {
-                        Task {
-                            do {
-                                _ = try await NotificationService.shared.requestCriticalAuthorization()
-                                await coordinator.refreshSystemStatus()
-                            } catch {
-                                coordinator.errorMessage = "Critical Alerts benötigen zusätzlich das spezielle Apple-Entitlement. \(error.localizedDescription)"
-                            }
-                        }
-                    }
-
-                    Button("iOS-Benachrichtigungseinstellungen öffnen") { coordinator.openSystemNotificationSettings() }
-
-                    Picker("Test-Priorität", selection: $testPriority) {
-                        ForEach(ReminderPriority.allCases) { Text($0.title).tag($0) }
-                    }
-                    Button("Test in 4 Sekunden senden") {
-                        Task {
-                            do { try await NotificationService.shared.scheduleTest(priority: testPriority) }
-                            catch { coordinator.errorMessage = error.localizedDescription }
-                        }
-                    }
+        Form {
+            Section("Systemhinweise") {
+                permissionRow(
+                    "Benachrichtigungen",
+                    symbol: "app.badge.fill",
+                    status: notificationText,
+                    color: notificationService.authorizationStatus == .authorized ? .green : .orange
+                ) {
+                    Task { _ = await notificationService.requestAuthorization() }
                 }
 
-                Section("Apple Erinnerungen") {
-                    statusRow("EventKit", value: eventKitStatusText(AppleRemindersService.shared.authorizationStatus), symbol: "checklist")
-                    Button {
-                        importFromApple()
-                    } label: {
-                        HStack {
-                            Label("Apple-Erinnerungen importieren", systemImage: "square.and.arrow.down")
-                            if isImportingApple { Spacer(); ProgressView() }
-                        }
+                permissionRow(
+                    "AlarmKit-Wecker",
+                    symbol: "alarm.waves.left.and.right.fill",
+                    status: alarmText,
+                    color: alarmService.authorizationState == .authorized ? .green : .orange
+                ) {
+                    Task { _ = await alarmService.requestAuthorization() }
+                }
+
+                Text("Dringende Erinnerungen können zeitkritisch zugestellt oder als echter AlarmKit-Wecker eskaliert werden. Apples Critical-Alerts-Sonderrecht ist bewusst nicht enthalten, weil es eine individuelle Freigabe von Apple benötigt.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Apple Kalender & Erinnerungen") {
+                permissionRow(
+                    "Kalender",
+                    symbol: "calendar",
+                    status: eventAccessText,
+                    color: hasEventAccess ? .green : .orange
+                ) {
+                    Task { _ = await eventService.requestEventAccess() }
+                }
+                permissionRow(
+                    "Apple Erinnerungen",
+                    symbol: "checklist.checked",
+                    status: reminderAccessText,
+                    color: hasReminderAccess ? .green : .orange
+                ) {
+                    Task { _ = await eventService.requestReminderAccess() }
+                }
+                Text("Die Verknüpfung ist optional. Ohne Zugriff funktionieren alle internen Erinnerungen, Notizen, Timer und Wecker weiter.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Bedienung") {
+                Toggle("Haptisches Feedback", isOn: $hapticsEnabled)
+                Toggle("Display bei laufendem Timer wach halten", isOn: $keepScreenAwake)
+                Picker("Standard-Timerton", selection: $defaultSound) {
+                    ForEach(TimerSoundCatalog.all) { sound in
+                        Label(sound.title, systemImage: sound.symbol).tag(sound.fileName)
                     }
-                    .disabled(isImportingApple)
-                    Text("Import liest nur nach deiner Freigabe. Bereits importierte Einträge werden über ihre Apple-ID nicht erneut angelegt.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-
-                Section("Backup & Migration") {
-                    Button("JSON-Backup exportieren") {
-                        let backup = ReminderBackup(reminders: reminders.map(ReminderTransferRecord.init))
-                        exportDocument = ReminderBackupDocument(backup: backup)
-                        showingExporter = true
-                    }
-                    Button("JSON-Backup importieren") { showingImporter = true }
-                    Button("Benachrichtigungen neu aufbauen") {
-                        Task { await coordinator.rebuildNotifications(for: reminders) }
-                    }
-                }
-
-                Section("Live Activities") {
-                    statusRow("ActivityKit", value: LiveActivityService.shared.activitiesEnabled ? "Verfügbar" : "Deaktiviert", symbol: "waveform.path.ecg.rectangle")
-                    Text("Live Activities sind optional pro Erinnerung. Sie zeigen den Countdown auf Sperrbildschirm und Dynamic Island; normale Notifications bleiben unabhängig davon aktiv.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Diagnose") {
-                    NavigationLink("Debug-Konsole") { DebugConsoleView() }
-                    Button("Systemstatus aktualisieren") { Task { await coordinator.refreshSystemStatus() } }
-                }
-
-                Section("Über RJ Ultra Erinnerungen") {
-                    LabeledContent("Version", value: "1.0")
-                    LabeledContent("Datenhaltung", value: "Lokal via SwiftData")
-                    Text("Critical Alerts, die Stummmodus und Fokus übergehen, funktionieren nur mit Apples besonderem Critical-Alert-Entitlement. Ohne dieses Entitlement fällt Ultra automatisch auf Time Sensitive zurück.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Button("Standardton testen", systemImage: "speaker.wave.2") {
+                    SoundPlayer.shared.preview(defaultSound)
                 }
             }
-            .navigationTitle("Mehr")
-            .task { await coordinator.refreshSystemStatus() }
-            .fileExporter(
-                isPresented: $showingExporter,
-                document: exportDocument,
-                contentType: .json,
-                defaultFilename: "RJ-Ultra-Erinnerungen-Backup.json"
-            ) { result in
-                if case .failure(let error) = result { coordinator.errorMessage = error.localizedDescription }
+
+            Section("Systemintegration") {
+                LabeledContent("Liquid Glass", value: "Aktiv")
+                LabeledContent("Dynamic Island", value: "AlarmKit")
+                LabeledContent("Live Activities", value: "Aktiv")
+                LabeledContent("Widgets", value: "Quick Capture & Timer")
+                LabeledContent("Control Center", value: "5 Min & Pomodoro")
+                LabeledContent("Siri / Kurzbefehle", value: "Timer")
             }
-            .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
-                switch result {
-                case .success(let urls):
-                    if let url = urls.first { importBackup(from: url) }
-                case .failure(let error): coordinator.errorMessage = error.localizedDescription
+
+            Section("Daten & Diagnose") {
+                if let url = appStore.exportURL() {
+                    ShareLink(item: url) {
+                        Label("Planer, Notizen und Wecker exportieren", systemImage: "square.and.arrow.up")
+                    }
+                }
+                if let url = timerStore.exportURL() {
+                    ShareLink(item: url) {
+                        Label("Timer-Daten exportieren", systemImage: "timer")
+                    }
+                }
+                Button("Debug-Konsole", systemImage: "ladybug.fill") { showDebug = true }
+                Button("Onboarding erneut zeigen", systemImage: "sparkles") {
+                    didCompleteOnboarding = false
                 }
             }
+
+            Section("RJ ZeitZentrale") {
+                LabeledContent("Version", value: "1.0 (1)")
+                LabeledContent("Minimum", value: "iOS 26.1")
+                LabeledContent("Datenmodell", value: "lokal & privat")
+            }
+        }
+        .navigationTitle("Einstellungen")
+        .sheet(isPresented: $showDebug) { DebugConsoleView() }
+        .task {
+            alarmService.refreshAuthorization()
+            await notificationService.refreshAuthorization()
+            eventService.refreshAuthorization()
         }
     }
 
-    private func importFromApple() {
-        isImportingApple = true
-        Task { @MainActor in
-            defer { isImportingApple = false }
-            do {
-                let records = try await AppleRemindersService.shared.fetchImportableReminders()
-                let existingExternalIDs = Set(reminders.compactMap(\.externalIdentifier))
-                var imported = 0
-                for record in records where record.externalIdentifier.map({ !existingExternalIDs.contains($0) }) ?? true {
-                    let model = record.makeModel()
-                    modelContext.insert(model)
-                    imported += 1
-                }
-                try modelContext.save()
-                coordinator.message = "\(imported) Apple-Erinnerung(en) importiert."
-            } catch {
-                coordinator.errorMessage = error.localizedDescription
-            }
+    private func permissionRow(
+        _ title: String,
+        symbol: String,
+        status: String,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Label(title, systemImage: symbol)
+            Spacer()
+            Button(status, action: action)
+                .foregroundStyle(color)
         }
     }
 
-    private func importBackup(from url: URL) {
-        Task { @MainActor in
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                let backup = try JSONDecoder.rjBackup.decode(ReminderBackup.self, from: data)
-                let existingIDs = Set(reminders.map(\.id))
-                var added = 0
-                for record in backup.reminders where !existingIDs.contains(record.id) {
-                    modelContext.insert(record.makeModel())
-                    added += 1
-                }
-                try modelContext.save()
-                coordinator.message = "\(added) Erinnerung(en) aus Backup importiert."
-            } catch {
-                coordinator.errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func statusRow(_ label: String, value: String, symbol: String) -> some View {
-        LabeledContent {
-            Text(value).foregroundStyle(.secondary)
-        } label: {
-            Label(label, systemImage: symbol)
-        }
-    }
-
-    private func authorizationText(_ status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: "Nicht gefragt"
-        case .denied: "Abgelehnt"
+    private var alarmText: String {
+        switch alarmService.authorizationState {
         case .authorized: "Erlaubt"
-        case .provisional: "Vorläufig"
-        case .ephemeral: "Temporär"
-        @unknown default: "Unbekannt"
-        }
-    }
-
-    private func settingText(_ status: UNNotificationSetting) -> String {
-        switch status {
-        case .notSupported: "Nicht unterstützt"
-        case .disabled: "Aus"
-        case .enabled: "An"
-        @unknown default: "Unbekannt"
-        }
-    }
-
-    private func eventKitStatusText(_ status: EKAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: "Nicht gefragt"
-        case .restricted: "Eingeschränkt"
         case .denied: "Abgelehnt"
-        case .fullAccess: "Vollzugriff"
-        case .writeOnly: "Nur Schreiben"
+        case .notDetermined: "Erlauben"
         @unknown default: "Unbekannt"
         }
     }
+
+    private var notificationText: String {
+        switch notificationService.authorizationStatus {
+        case .authorized, .provisional, .ephemeral: "Erlaubt"
+        case .denied: "Abgelehnt"
+        case .notDetermined: "Erlauben"
+        @unknown default: "Unbekannt"
+        }
+    }
+
+    private var hasEventAccess: Bool {
+        eventService.eventAuthorization == .fullAccess || eventService.eventAuthorization == .authorized
+    }
+    private var hasReminderAccess: Bool {
+        eventService.reminderAuthorization == .fullAccess || eventService.reminderAuthorization == .authorized
+    }
+    private var eventAccessText: String { hasEventAccess ? "Verbunden" : "Verbinden" }
+    private var reminderAccessText: String { hasReminderAccess ? "Verbunden" : "Verbinden" }
 }

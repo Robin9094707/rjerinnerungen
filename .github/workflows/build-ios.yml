@@ -1,16 +1,18 @@
-name: Build RJ Ultra Erinnerungen IPA
+name: Build RJ ZeitZentrale IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build unsigned iOS IPA
+    name: Test and build unsigned iOS IPA
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -22,7 +24,7 @@ jobs:
           set -euo pipefail
           sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
           xcodebuild -version
-          xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
 
       - name: Install XcodeGen
         shell: bash
@@ -31,28 +33,38 @@ jobs:
           brew install xcodegen
           xcodegen --version
 
-      - name: Validate project inputs
+      - name: Validate sources and generate project
         shell: bash
         run: |
           set -euo pipefail
           plutil -lint App/Info.plist WidgetExtension/Info.plist
-          test -f project.yml
-          find App Shared WidgetExtension -name '*.swift' -print | sort
+          xcodegen generate --spec project.yml
+          xcodebuild -list -project RJZeitZentrale.xcodeproj
 
-      - name: Generate Xcode project
+      - name: Run unit tests
         shell: bash
         run: |
-          set -euo pipefail
-          xcodegen generate --spec project.yml
+          set -o pipefail
+          xcodebuild test \
+            -project RJZeitZentrale.xcodeproj \
+            -scheme RJZeitZentrale \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=26.5' \
+            -derivedDataPath "$PWD/.github-tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee RJ-ZeitZentrale-tests.log
 
-      - name: Build unsigned app
+      - name: Build unsigned device app
         shell: bash
         run: |
           set -o pipefail
           rm -rf .github-derived
           xcodebuild \
-            -project RJUltraReminders.xcodeproj \
-            -scheme RJUltraReminders \
+            -project RJZeitZentrale.xcodeproj \
+            -scheme RJZeitZentrale \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -60,37 +72,43 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee RJ-Ultra-Reminders-build.log
+            build 2>&1 | tee RJ-ZeitZentrale-build.log
 
       - name: Create unsigned IPA
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          APP="$(find "$PWD/.github-derived/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -type d -print -quit)"
-          test -n "$APP"
+          APP="$(find "$PWD/.github-derived/Build/Products/Release-iphoneos" \
+            -maxdepth 1 -name 'RJ ZeitZentrale.app' -type d -print -quit)"
+          if [ -z "$APP" ]; then
+            echo "No main .app found."
+            exit 1
+          fi
           rm -rf Payload
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry RJ-Ultra-Reminders-unsigned.ipa Payload
-          unzip -t RJ-Ultra-Reminders-unsigned.ipa
-          ls -lh RJ-Ultra-Reminders-unsigned.ipa
+          /usr/bin/zip -qry RJ-ZeitZentrale-unsigned.ipa Payload
+          unzip -t RJ-ZeitZentrale-unsigned.ipa
+          ls -lh RJ-ZeitZentrale-unsigned.ipa
 
-      - name: Upload IPA
+      - name: Upload unsigned IPA
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: RJ-Ultra-Reminders-unsigned-IPA
-          path: RJ-Ultra-Reminders-unsigned.ipa
+          name: RJ-ZeitZentrale-unsigned-IPA
+          path: RJ-ZeitZentrale-unsigned.ipa
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
           compression-level: 0
 
-      - name: Upload build log on failure
+      - name: Upload build diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: RJ-Ultra-Reminders-build-log
-          path: RJ-Ultra-Reminders-build.log
+          name: RJ-ZeitZentrale-build-log
+          path: |
+            RJ-ZeitZentrale-tests.log
+            RJ-ZeitZentrale-build.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 14
