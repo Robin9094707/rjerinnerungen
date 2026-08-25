@@ -31,92 +31,12 @@ jobs:
           brew install xcodegen
           xcodegen --version
 
-      - name: Generate build resources
-        shell: bash
-        run: |
-          set -euo pipefail
-          ICON_DIR="App/Resources/Assets.xcassets/AppIcon.appiconset"
-          mkdir -p "$ICON_DIR" App/Resources
-
-          python3 - <<'PY'
-          import math, wave, struct
-          from pathlib import Path
-
-          icon_dir = Path('App/Resources/Assets.xcassets/AppIcon.appiconset')
-          icon_dir.mkdir(parents=True, exist_ok=True)
-
-          # Deterministic 1024x1024 RGB PPM master icon. macOS sips converts it to PNG below.
-          w = h = 1024
-          ppm = icon_dir / 'Icon-master.ppm'
-          with ppm.open('wb') as f:
-              f.write(f'P6\n{w} {h}\n255\n'.encode())
-              for y in range(h):
-                  for x in range(w):
-                      dx, dy = x - w/2, y - h/2
-                      r = (dx*dx + dy*dy) ** 0.5
-                      glow = max(0.0, 1.0 - r / 720.0)
-                      rr = int(18 + 30 * glow)
-                      gg = int(80 + 105 * glow)
-                      bb = int(150 + 100 * glow)
-                      # bright reminder/bell core
-                      if r < 285:
-                          rr, gg, bb = 45, 170, 255
-                      if 250 < r < 285:
-                          rr, gg, bb = 220, 245, 255
-                      f.write(bytes((rr, gg, bb)))
-
-          def tone(path, frequency, duration, volume=0.32):
-              rate = 44100
-              frames = int(rate * duration)
-              with wave.open(str(path), 'w') as out:
-                  out.setnchannels(1)
-                  out.setsampwidth(2)
-                  out.setframerate(rate)
-                  for i in range(frames):
-                      env = min(1.0, i / (rate * 0.03), (frames - i) / (rate * 0.06))
-                      sample = int(32767 * volume * max(0.0, env) * math.sin(2 * math.pi * frequency * i / rate))
-                      out.writeframesraw(struct.pack('<h', sample))
-
-          tone(Path('App/Resources/rj_chime.wav'), 880, 0.55, 0.24)
-          tone(Path('App/Resources/rj_urgent.wav'), 1046.5, 0.75, 0.34)
-          tone(Path('App/Resources/rj_ultra.wav'), 1318.5, 1.00, 0.42)
-          PY
-
-          sips -s format png "$ICON_DIR/Icon-master.ppm" --out "$ICON_DIR/Icon-1024.png" >/dev/null
-          rm "$ICON_DIR/Icon-master.ppm"
-
-          make_icon() {
-            local size="$1" name="$2"
-            sips -z "$size" "$size" "$ICON_DIR/Icon-1024.png" --out "$ICON_DIR/$name" >/dev/null
-          }
-          make_icon 40  'Icon-20@2x.png'
-          make_icon 60  'Icon-20@3x.png'
-          make_icon 58  'Icon-29@2x.png'
-          make_icon 87  'Icon-29@3x.png'
-          make_icon 80  'Icon-40@2x.png'
-          make_icon 120 'Icon-40@3x.png'
-          make_icon 120 'Icon-60@2x.png'
-          make_icon 180 'Icon-60@3x.png'
-          make_icon 20  'Icon-20@1x-ipad.png'
-          make_icon 40  'Icon-20@2x-ipad.png'
-          make_icon 29  'Icon-29@1x-ipad.png'
-          make_icon 58  'Icon-29@2x-ipad.png'
-          make_icon 40  'Icon-40@1x-ipad.png'
-          make_icon 80  'Icon-40@2x-ipad.png'
-          make_icon 76  'Icon-76@1x.png'
-          make_icon 152 'Icon-76@2x.png'
-          make_icon 167 'Icon-83.5@2x.png'
-
       - name: Validate project inputs
         shell: bash
         run: |
           set -euo pipefail
           plutil -lint App/Info.plist WidgetExtension/Info.plist
           test -f project.yml
-          test -f App/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png
-          test -f App/Resources/rj_chime.wav
-          test -f App/Resources/rj_urgent.wav
-          test -f App/Resources/rj_ultra.wav
           find App Shared WidgetExtension -name '*.swift' -print | sort
 
       - name: Generate Xcode project
