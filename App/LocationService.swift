@@ -13,7 +13,7 @@ struct RJPlaceResult: Identifiable, Hashable, Sendable {
 
 @MainActor
 @Observable
-final class LocationService: NSObject, CLLocationManagerDelegate {
+final class LocationService: NSObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = LocationService()
 
     private let manager = CLLocationManager()

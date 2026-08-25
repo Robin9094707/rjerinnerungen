@@ -229,7 +229,7 @@ final class AppDataStore {
             note.attachments.forEach(NoteMediaStore.delete)
             note.recordings.forEach(NoteMediaStore.delete)
         }
-        notes.removeAll(\.isTrashed)
+        notes.removeAll { $0.isTrashed }
         saveNotes()
     }
 
