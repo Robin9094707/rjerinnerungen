@@ -48,6 +48,15 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .rjNotificationAction)) {
             appStore.handleNotificationAction($0)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .rjQuickAction)) { notification in
+            guard let raw = notification.userInfo?["type"] as? String,
+                  let action = RJQuickAction(rawValue: raw) else { return }
+            router.handle(action)
+            _ = QuickActionCenter.consumePending()
+        }
+        .task {
+            if let action = QuickActionCenter.consumePending() { router.handle(action) }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && !timerStore.activeTimers.isEmpty

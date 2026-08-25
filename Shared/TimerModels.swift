@@ -143,7 +143,8 @@ enum TimerSoundCatalog {
     ]
 
     static func title(for file: String) -> String {
-        all.first(where: { $0.fileName == file })?.title ?? "System"
+        all.first(where: { $0.fileName == file })?.title
+            ?? URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
     }
 }
 

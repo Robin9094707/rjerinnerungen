@@ -3,6 +3,8 @@ import SwiftUI
 struct PresetsView: View {
     @Environment(TimerStore.self) private var store
     @State private var showAdd = false
+    @State private var soundStore = CustomSoundStore.shared
+    @State private var pendingDelete: TimerPreset?
 
     var body: some View {
         NavigationStack {
@@ -33,6 +35,18 @@ struct PresetsView: View {
             .sheet(isPresented: $showAdd) {
                 NewPresetView()
             }
+            .alert("Preset löschen?", isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            )) {
+                Button("Abbrechen", role: .cancel) { pendingDelete = nil }
+                Button("Löschen", role: .destructive) {
+                    if let preset = pendingDelete { store.deletePreset(preset.id) }
+                    pendingDelete = nil
+                }
+            } message: {
+                Text("Das Timer-Preset wird endgültig entfernt.")
+            }
         }
     }
 
@@ -62,7 +76,7 @@ struct PresetsView: View {
                     .monospacedDigit()
                     .foregroundStyle(preset.accent.color)
 
-                Text(TimerSoundCatalog.title(for: preset.soundFile))
+                Text(soundStore.title(for: preset.soundFile))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -80,6 +94,9 @@ struct PresetsView: View {
                     systemImage: preset.favorite ? "star.slash" : "star"
                 )
             }
+            Button("Löschen", systemImage: "trash", role: .destructive) {
+                pendingDelete = preset
+            }
         }
     }
 }
@@ -96,6 +113,8 @@ struct NewPresetView: View {
     @State private var accent: TimerAccentToken = .cyan
     @State private var soundFile = "glass_chime.wav"
     @State private var favorite = false
+    @State private var soundStore = CustomSoundStore.shared
+    @State private var showCancelConfirmation = false
 
     private var duration: TimeInterval {
         TimeInterval(hours * 3600 + minutes * 60 + seconds)
@@ -120,7 +139,7 @@ struct NewPresetView: View {
 
                 Section("Ton") {
                     Picker("Alarmton", selection: $soundFile) {
-                        ForEach(TimerSoundCatalog.all) { sound in
+                        ForEach(soundStore.catalogItems) { sound in
                             Text(sound.title).tag(sound.fileName)
                         }
                     }
@@ -129,7 +148,7 @@ struct NewPresetView: View {
             .navigationTitle("Neues Preset")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button("Abbrechen") { showCancelConfirmation = true }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Speichern") {
@@ -147,6 +166,13 @@ struct NewPresetView: View {
                     }
                     .disabled(duration < 1)
                 }
+            }
+            .interactiveDismissDisabled()
+            .alert("Preset verwerfen?", isPresented: $showCancelConfirmation) {
+                Button("Weiter bearbeiten", role: .cancel) {}
+                Button("Verwerfen", role: .destructive) { dismiss() }
+            } message: {
+                Text("Das noch nicht gespeicherte Timer-Preset geht verloren.")
             }
         }
     }

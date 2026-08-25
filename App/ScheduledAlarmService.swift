@@ -57,9 +57,11 @@ final class ScheduledAlarmService {
             kind: .scheduledAlarm,
             fireDate: alarm.nextFireDate()
         )
+        // A fixed high-contrast system blue prevents the label from becoming
+        // unreadable when a user picks an accent close to the alarm surface.
         let snoozeButton = AlarmButton(
-            text: "Snooze",
-            textColor: alarm.accent.color,
+            text: "Schlummern",
+            textColor: .blue,
             systemImageName: "zzz"
         )
         let alert = AlarmPresentation.Alert(
@@ -92,12 +94,16 @@ final class ScheduledAlarmService {
             metadata: metadata,
             tintColor: alarm.accent.color
         )
-        let sound: AlertConfiguration.AlertSound = alarm.soundFile == "default"
+        let canResolveSound = alarm.soundFile != "default"
+            && SoundPlayer.shared.resolve(alarm.soundFile) != nil
+        let sound: AlertConfiguration.AlertSound = !canResolveSound
             ? .default
             : .named(alarm.soundFile)
         let configuration = AlarmManager.AlarmConfiguration(
             countdownDuration: Alarm.CountdownDuration(
-                preAlert: nil,
+                preAlert: alarm.preAlertMinutes > 0
+                    ? TimeInterval(alarm.preAlertMinutes * 60)
+                    : nil,
                 postAlert: TimeInterval(max(1, alarm.snoozeMinutes) * 60)
             ),
             schedule: schedule,
@@ -120,6 +126,7 @@ final class ScheduledAlarmService {
             enabled: true,
             soundFile: "default",
             snoozeMinutes: 9,
+            preAlertMinutes: 0,
             accent: .orange
         )
         try await schedule(alarm)

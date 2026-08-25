@@ -2,6 +2,8 @@ name: Build RJ ZeitZentrale IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -35,7 +37,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plutil -lint App/Info.plist WidgetExtension/Info.plist
+          plutil -lint App/Info.plist WidgetExtension/Info.plist \
+            Configuration/RJZeitZentrale-iCloud.entitlements.example
           xcodegen generate --spec project.yml
           xcodebuild -list -project RJZeitZentrale.xcodeproj
 
@@ -88,6 +91,11 @@ jobs:
           test -f "$APP/soft_bell.wav"
           test -f "$APP/digital_pulse.wav"
           test -d "$APP/PlugIns/RJZeitZentraleWidgets.appex"
+          test ! -d "$APP/_CodeSignature"
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSLocationAlwaysAndWhenInUseUsageDescription' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :UIApplicationShortcutItems:0:UIApplicationShortcutItemType' "$APP/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "2.0"
           rm -rf Payload
           mkdir -p Payload
           cp -R "$APP" Payload/

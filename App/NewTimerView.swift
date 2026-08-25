@@ -13,6 +13,8 @@ struct NewTimerView: View {
     @State private var symbol = "timer"
     @State private var accent: TimerAccentToken = .cyan
     @State private var soundFile = "glass_chime.wav"
+    @State private var soundStore = CustomSoundStore.shared
+    @State private var showCancelConfirmation = false
 
     private let symbols = [
         "timer", "cup.and.saucer.fill", "mug.fill", "brain.head.profile.fill",
@@ -80,7 +82,7 @@ struct NewTimerView: View {
 
                     Section("Ton") {
                         Picker("Alarmton", selection: $soundFile) {
-                            ForEach(TimerSoundCatalog.all) { sound in
+                            ForEach(soundStore.catalogItems) { sound in
                                 Label(sound.title, systemImage: sound.symbol)
                                     .tag(sound.fileName)
                             }
@@ -108,7 +110,7 @@ struct NewTimerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button("Abbrechen") { showCancelConfirmation = true }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -132,6 +134,13 @@ struct NewTimerView: View {
             }
             .onAppear {
                 soundFile = defaultSound
+            }
+            .interactiveDismissDisabled()
+            .alert("Timer nicht starten?", isPresented: $showCancelConfirmation) {
+                Button("Weiter einstellen", role: .cancel) {}
+                Button("Entwurf verwerfen", role: .destructive) { dismiss() }
+            } message: {
+                Text("Die eingestellte Dauer und alle Optionen gehen verloren.")
             }
         }
     }

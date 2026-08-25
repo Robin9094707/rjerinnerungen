@@ -130,7 +130,13 @@ final class EventKitService {
         guard let calendar = eventStore.defaultCalendarForNewReminders() else {
             throw EventKitServiceError.noReminderList
         }
-        let reminder = EKReminder(eventStore: eventStore)
+        let reminder: EKReminder
+        if let identifier = item.systemReminderIdentifier,
+           let existing = eventStore.calendarItem(withIdentifier: identifier) as? EKReminder {
+            reminder = existing
+        } else {
+            reminder = EKReminder(eventStore: eventStore)
+        }
         reminder.title = item.title
         reminder.notes = item.details.isEmpty ? nil : item.details
         reminder.priority = switch item.priority {
@@ -140,16 +146,79 @@ final class EventKitService {
         case .low: 9
         }
         reminder.calendar = calendar
+        for alarm in reminder.alarms ?? [] { reminder.removeAlarm(alarm) }
+        for rule in reminder.recurrenceRules ?? [] { reminder.removeRecurrenceRule(rule) }
         if let dueDate = item.dueDate {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.calendar, .timeZone, .year, .month, .day, .hour, .minute],
-                from: dueDate
-            )
-            reminder.addAlarm(EKAlarm(absoluteDate: dueDate))
+            let components: Set<Calendar.Component> = item.hasTime
+                ? [.calendar, .timeZone, .year, .month, .day, .hour, .minute]
+                : [.calendar, .timeZone, .year, .month, .day]
+            reminder.dueDateComponents = Calendar.current.dateComponents(components, from: dueDate)
+            for seconds in item.notificationLeadTimes {
+                reminder.addAlarm(EKAlarm(relativeOffset: TimeInterval(-max(0, seconds))))
+            }
+            if let recurrence = eventKitRecurrence(for: item.effectiveRecurrence) {
+                reminder.addRecurrenceRule(recurrence)
+            }
+        } else {
+            reminder.dueDateComponents = nil
         }
         try eventStore.save(reminder, commit: true)
         await refresh()
         return reminder.calendarItemIdentifier
+    }
+
+    private func eventKitRecurrence(for rule: RJRecurrenceRule) -> EKRecurrenceRule? {
+        guard rule.isRepeating else { return nil }
+        let frequency: EKRecurrenceFrequency = switch rule.frequency {
+        case .hourly: .daily // EventKit reminders have no hourly recurrence; keep a daily system copy.
+        case .daily: .daily
+        case .weekly: .weekly
+        case .monthly: .monthly
+        case .yearly: .yearly
+        case .never: .daily
+        }
+        let end: EKRecurrenceEnd?
+        if let occurrenceLimit = rule.occurrenceLimit {
+            end = EKRecurrenceEnd(occurrenceCount: max(1, occurrenceLimit))
+        } else if let endDate = rule.endDate {
+            end = EKRecurrenceEnd(end: endDate)
+        } else {
+            end = nil
+        }
+
+        if rule.frequency == .weekly, !rule.weekdays.isEmpty {
+            let days = rule.weekdays.map { EKRecurrenceDayOfWeek($0.eventKitWeekday) }
+            return EKRecurrenceRule(
+                recurrenceWith: frequency,
+                interval: max(1, rule.interval),
+                daysOfTheWeek: days,
+                daysOfTheMonth: nil,
+                monthsOfTheYear: nil,
+                weeksOfTheYear: nil,
+                daysOfTheYear: nil,
+                setPositions: nil,
+                end: end
+            )
+        }
+        return EKRecurrenceRule(
+            recurrenceWith: frequency,
+            interval: max(1, rule.interval),
+            end: end
+        )
+    }
+}
+
+private extension RJWeekday {
+    var eventKitWeekday: EKWeekday {
+        switch self {
+        case .sunday: .sunday
+        case .monday: .monday
+        case .tuesday: .tuesday
+        case .wednesday: .wednesday
+        case .thursday: .thursday
+        case .friday: .friday
+        case .saturday: .saturday
+        }
     }
 }
 

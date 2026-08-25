@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimerHomeView: View {
     @Environment(TimerStore.self) private var store
+    @Environment(AppRouter.self) private var router
     @State private var showNewTimer = false
 
     var body: some View {
@@ -45,6 +46,12 @@ struct TimerHomeView: View {
             }
             .sheet(isPresented: $showNewTimer) {
                 NewTimerView()
+            }
+            .onChange(of: router.showNewTimer) { _, requested in
+                if requested {
+                    showNewTimer = true
+                    router.showNewTimer = false
+                }
             }
         }
     }

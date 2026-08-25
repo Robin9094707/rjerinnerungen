@@ -15,8 +15,7 @@ final class DebugLogger {
     }()
 
     var logURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("RJ-ZeitZentrale-Debug.log")
+        AppPersistence.root.appendingPathComponent("RJ-ZeitZentrale-Debug.log")
     }
 
     func load() {
@@ -43,6 +42,10 @@ final class DebugLogger {
         let data = Data(text.utf8)
         if !FileManager.default.fileExists(atPath: logURL.path) {
             FileManager.default.createFile(atPath: logURL.path, contents: data)
+            try? FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: logURL.path
+            )
             return
         }
 

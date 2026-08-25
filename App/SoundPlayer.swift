@@ -17,10 +17,9 @@ final class SoundPlayer: NSObject, AVAudioPlayerDelegate {
             return
         }
 
-        let base = (file as NSString).deletingPathExtension
-        let ext = (file as NSString).pathExtension
-        guard let url = Bundle.main.url(forResource: base, withExtension: ext) else {
-            DebugLogger.shared.log("Sound nicht gefunden: \(file)")
+        guard let url = resolve(file) else {
+            DebugLogger.shared.log("Sound nicht gefunden: \(file); Systemton wird verwendet")
+            Haptics.warning()
             return
         }
 
@@ -48,5 +47,13 @@ final class SoundPlayer: NSObject, AVAudioPlayerDelegate {
         Task { @MainActor in
             self.playingFile = nil
         }
+    }
+
+    func resolve(_ file: String) -> URL? {
+        if let custom = CustomSoundStore.shared.url(for: file) { return custom }
+        let base = (file as NSString).deletingPathExtension
+        let ext = (file as NSString).pathExtension
+        return Bundle.main.url(forResource: base, withExtension: ext)
+            ?? Bundle.main.url(forResource: base, withExtension: ext, subdirectory: "Resources")
     }
 }

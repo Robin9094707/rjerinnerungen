@@ -44,6 +44,12 @@ struct DashboardView: View {
             .sheet(isPresented: $showNote) { NoteEditorView() }
             .sheet(isPresented: $showAlarm) { AlarmEditorView() }
             .sheet(isPresented: $showTimer) { NewTimerView() }
+            .onChange(of: router.showNewAlarm) { _, requested in
+                if requested {
+                    showAlarm = true
+                    router.showNewAlarm = false
+                }
+            }
         }
     }
 
@@ -98,7 +104,7 @@ struct DashboardView: View {
                 color: .orange
             )
             RJMetric(
-                value: "\(appStore.notes.count)",
+                value: "\(appStore.activeNotes.count)",
                 label: "Notizen",
                 symbol: "note.text",
                 color: .purple

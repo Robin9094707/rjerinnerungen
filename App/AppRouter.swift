@@ -19,6 +19,7 @@ final class AppRouter {
     var requestedNoteID: UUID?
     var showNewReminder = false
     var showNewNote = false
+    var showNewTimer = false
     var showNewAlarm = false
 
     func handle(_ url: URL) {
@@ -44,11 +45,31 @@ final class AppRouter {
         case "new-note":
             selectedTab = .notes
             showNewNote = true
+        case "new-timer":
+            selectedTab = .timers
+            showNewTimer = true
         case "new-alarm":
-            selectedTab = .more
+            selectedTab = .center
             showNewAlarm = true
         default:
             selectedTab = .center
+        }
+    }
+
+    func handle(_ action: RJQuickAction) {
+        switch action {
+        case .newReminder:
+            selectedTab = .planner
+            showNewReminder = true
+        case .newNote:
+            selectedTab = .notes
+            showNewNote = true
+        case .newTimer:
+            selectedTab = .timers
+            showNewTimer = true
+        case .newAlarm:
+            selectedTab = .center
+            showNewAlarm = true
         }
     }
 }

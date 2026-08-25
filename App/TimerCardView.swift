@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TimerCardView: View {
     @Environment(TimerStore.self) private var store
+    @State private var showStopConfirmation = false
+    @State private var showDeleteConfirmation = false
     let timerID: UUID
 
     private var timer: TimerRecord? {
@@ -56,6 +58,18 @@ struct TimerCardView: View {
                         controls(timer)
                     }
                 }
+            }
+            .alert("Timer stoppen?", isPresented: $showStopConfirmation) {
+                Button("Weiterlaufen lassen", role: .cancel) {}
+                Button("Stoppen", role: .destructive) { store.stop(timer.id) }
+            } message: {
+                Text("Der laufende AlarmKit-Timer wird beendet und im Verlauf gespeichert.")
+            }
+            .alert("Timer löschen?", isPresented: $showDeleteConfirmation) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Löschen", role: .destructive) { store.deleteTimer(timer.id) }
+            } message: {
+                Text("Der Timer wird aus der App und aus AlarmKit entfernt.")
             }
         }
     }
@@ -144,13 +158,13 @@ struct TimerCardView: View {
                     }
 
                     Button(role: .destructive) {
-                        store.stop(timer.id)
+                        showStopConfirmation = true
                     } label: {
                         Label("Stoppen", systemImage: "stop.fill")
                     }
 
                     Button(role: .destructive) {
-                        store.deleteTimer(timer.id)
+                        showDeleteConfirmation = true
                     } label: {
                         Label("Löschen", systemImage: "trash")
                     }

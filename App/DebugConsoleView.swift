@@ -3,6 +3,7 @@ import SwiftUI
 struct DebugConsoleView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var logger = DebugLogger.shared
+    @State private var showClearConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -37,11 +38,17 @@ struct DebugConsoleView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Leeren", role: .destructive) {
-                        logger.clear()
+                        showClearConfirmation = true
                     }
                 }
             }
             .onAppear { logger.load() }
+            .alert("Debug-Protokoll leeren?", isPresented: $showClearConfirmation) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Leeren", role: .destructive) { logger.clear() }
+            } message: {
+                Text("Alle lokalen Diagnoseeinträge werden unwiderruflich gelöscht.")
+            }
         }
     }
 }

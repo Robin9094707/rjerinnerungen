@@ -17,6 +17,7 @@ struct PlannerView: View {
     @State private var visibleMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var editingReminder: ReminderItem?
     @State private var showNewReminder = false
+    @State private var pendingDelete: ReminderItem?
 
     var body: some View {
         NavigationStack {
@@ -52,6 +53,18 @@ struct PlannerView: View {
             }
             .sheet(isPresented: $showNewReminder) { ReminderEditorView() }
             .sheet(item: $editingReminder) { ReminderEditorView(reminder: $0) }
+            .alert("Erinnerung löschen?", isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            )) {
+                Button("Abbrechen", role: .cancel) { pendingDelete = nil }
+                Button("Löschen", role: .destructive) {
+                    if let reminder = pendingDelete { store.deleteReminder(reminder.id) }
+                    pendingDelete = nil
+                }
+            } message: {
+                Text("Geplante Hinweise und ein zugehöriger AlarmKit-Wecker werden ebenfalls entfernt.")
+            }
             .refreshable { await eventService.refresh() }
             .onChange(of: router.showNewReminder) { _, requested in
                 if requested {
@@ -128,7 +141,7 @@ struct PlannerView: View {
                     .contextMenu {
                         Button("Bearbeiten", systemImage: "pencil") { editingReminder = reminder }
                         Button("Löschen", systemImage: "trash", role: .destructive) {
-                            store.deleteReminder(reminder.id)
+                            pendingDelete = reminder
                         }
                     }
                 }
@@ -243,7 +256,12 @@ struct PlannerView: View {
 
     private var markedDates: Set<Date> {
         let calendar = Calendar.current
-        let reminderDates = store.reminders.compactMap(\.dueDate).map(calendar.startOfDay)
+        let monthDays = calendar.range(of: .day, in: .month, for: visibleMonth)?.compactMap {
+            calendar.date(bySetting: .day, value: $0, of: visibleMonth)
+        } ?? []
+        let reminderDates = monthDays.filter { day in
+            store.reminders.contains { !$0.completed && $0.occurs(on: day, calendar: calendar) }
+        }.map(calendar.startOfDay)
         let eventDates = eventService.events.map(\.startDate).map(calendar.startOfDay)
         return Set(reminderDates + eventDates)
     }
@@ -398,6 +416,21 @@ struct ReminderRow: View {
                         } else {
                             Text("Ohne Termin")
                                 .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if reminder.effectiveRecurrence.isRepeating {
+                            Label(reminder.recurrenceSummary, systemImage: "repeat")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let location = reminder.locationTrigger {
+                            Label(location.name, systemImage: location.event.symbol)
+                                .font(.caption2)
+                                .foregroundStyle(.cyan)
+                        }
+                        if !reminder.normalizedTags.isEmpty {
+                            Text(reminder.normalizedTags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }

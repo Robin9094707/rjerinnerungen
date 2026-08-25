@@ -37,6 +37,12 @@
 	<string>RJ ZeitZentrale verwendet Systemwecker und Systemtimer, damit wichtige Alarme zuverlässig auf Sperrbildschirm, Dynamic Island und in StandBy erscheinen.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>RJ ZeitZentrale zeigt auf Wunsch deine Kalendertermine an und kann neue Termine in deinen ausgewählten iOS-Kalender schreiben.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>RJ ZeitZentrale verwendet deinen Standort nur für freiwillig erstellte Erinnerungen beim Betreten oder Verlassen eines gespeicherten Ortes.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RJ ZeitZentrale benötigt deinen Standort, damit du aktuelle und gesuchte Orte für Erinnerungen auswählen kannst.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>RJ ZeitZentrale verwendet das Mikrofon ausschließlich, wenn du eine Sprachnotiz aufnimmst.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>RJ ZeitZentrale kann Erinnerungen auf Wunsch mit Apple Erinnerungen synchronisieren.</string>
 	<key>NSSupportsLiveActivities</key>
@@ -45,6 +51,49 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>eu.rjuhas.zeitzentrale.quick.new-reminder</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Neue Erinnerung</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Schnell erfassen</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAdd</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>eu.rjuhas.zeitzentrale.quick.new-note</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Neue Notiz</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Text, Bild oder Sprache</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCompose</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>eu.rjuhas.zeitzentrale.quick.new-timer</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Neuer Timer</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Direkt starten</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypePlay</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>eu.rjuhas.zeitzentrale.quick.new-alarm</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Neuer Wecker</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>AlarmKit-Wecker</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAlarm</string>
+		</dict>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

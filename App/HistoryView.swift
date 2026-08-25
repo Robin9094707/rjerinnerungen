@@ -3,6 +3,8 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(TimerStore.self) private var store
+    @State private var showClearConfirmation = false
+    @State private var pendingDeleteOffsets: IndexSet?
 
     var body: some View {
         NavigationStack {
@@ -52,7 +54,7 @@ struct HistoryView: View {
                                     }
                                 }
                             }
-                            .onDelete(perform: store.deleteHistory)
+                            .onDelete { pendingDeleteOffsets = $0 }
                         }
                     }
                     .scrollContentBackground(.hidden)
@@ -63,13 +65,29 @@ struct HistoryView: View {
                 if !store.history.isEmpty {
                     Menu {
                         Button(role: .destructive) {
-                            store.clearHistory()
+                            showClearConfirmation = true
                         } label: {
                             Label("Verlauf löschen", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                }
+            }
+            .alert("Gesamten Verlauf löschen?", isPresented: $showClearConfirmation) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Alles löschen", role: .destructive) { store.clearHistory() }
+            } message: {
+                Text("Alle Timer-Statistiken und Verlaufseinträge werden unwiderruflich entfernt.")
+            }
+            .alert("Verlaufseintrag löschen?", isPresented: Binding(
+                get: { pendingDeleteOffsets != nil },
+                set: { if !$0 { pendingDeleteOffsets = nil } }
+            )) {
+                Button("Abbrechen", role: .cancel) { pendingDeleteOffsets = nil }
+                Button("Löschen", role: .destructive) {
+                    if let offsets = pendingDeleteOffsets { store.deleteHistory(at: offsets) }
+                    pendingDeleteOffsets = nil
                 }
             }
         }

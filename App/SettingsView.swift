@@ -1,6 +1,7 @@
 import AlarmKit
 import EventKit
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 struct SettingsView: View {
@@ -15,6 +16,9 @@ struct SettingsView: View {
     @State private var alarmService = AlarmKitService.shared
     @State private var notificationService = NotificationService.shared
     @State private var eventService = EventKitService.shared
+    @State private var locationService = LocationService.shared
+    @State private var cloudService = ICloudSyncService.shared
+    @State private var soundStore = CustomSoundStore.shared
     @State private var showDebug = false
 
     var body: some View {
@@ -65,16 +69,79 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Standort-Erinnerungen") {
+                permissionRow(
+                    "Ortungsdienste",
+                    symbol: "location.fill",
+                    status: locationService.statusText,
+                    color: locationService.isAlwaysAuthorized ? .green : .orange
+                ) {
+                    locationService.requestLocationReminderAccess()
+                }
+                Text("Für Hinweise beim Betreten oder Verlassen eines Ortes benötigt iOS die Freigabe „Immer“. Die App verfolgt deinen Standort nicht dauerhaft; iOS überwacht nur deine gespeicherten Radien.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Optionale iCloud-Synchronisierung") {
+                Toggle(
+                    "Daten und Medien synchronisieren",
+                    isOn: Binding(
+                        get: { cloudService.isEnabled },
+                        set: { enabled in
+                            Task {
+                                do {
+                                    let result = try await cloudService.setEnabled(enabled)
+                                    if result == .downloaded {
+                                        appStore.reloadFromDisk()
+                                        timerStore.reloadFromDisk()
+                                    }
+                                } catch {
+                                    appStore.lastError = error.localizedDescription
+                                }
+                            }
+                        }
+                    )
+                )
+                .disabled(!cloudService.isAvailable && !cloudService.isEnabled)
+                LabeledContent("Verfügbarkeit", value: cloudService.isAvailable ? "Bereit" : "Nicht in Signatur")
+                LabeledContent("Status", value: cloudService.lastStatus)
+                if cloudService.isEnabled {
+                    Button("Jetzt synchronisieren", systemImage: "arrow.triangle.2.circlepath.icloud") {
+                        Task {
+                            do {
+                                let result = try await cloudService.synchronize()
+                                if result == .downloaded {
+                                    appStore.reloadFromDisk()
+                                    timerStore.reloadFromDisk()
+                                }
+                            } catch {
+                                appStore.lastError = error.localizedDescription
+                            }
+                        }
+                    }
+                    .disabled(cloudService.isSynchronizing)
+                }
+                Text("Bei normalem Sideloading bleibt iCloud aus. Es funktioniert nur, wenn dein eigenes Provisioning Profile den passenden iCloud-Container enthält. Beim ersten Aktivieren wird eine vorhandene Cloud-Kopie übernommen; andernfalls werden lokale Daten hochgeladen.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Bedienung") {
                 Toggle("Haptisches Feedback", isOn: $hapticsEnabled)
                 Toggle("Display bei laufendem Timer wach halten", isOn: $keepScreenAwake)
                 Picker("Standard-Timerton", selection: $defaultSound) {
-                    ForEach(TimerSoundCatalog.all) { sound in
+                    ForEach(soundStore.catalogItems) { sound in
                         Label(sound.title, systemImage: sound.symbol).tag(sound.fileName)
                     }
                 }
                 Button("Standardton testen", systemImage: "speaker.wave.2") {
                     SoundPlayer.shared.preview(defaultSound)
+                }
+                NavigationLink {
+                    CustomSoundLibraryView()
+                } label: {
+                    LabeledContent("Eigene Wecktöne", value: "\(soundStore.sounds.count)")
                 }
             }
 
@@ -105,9 +172,9 @@ struct SettingsView: View {
             }
 
             Section("RJ ZeitZentrale") {
-                LabeledContent("Version", value: "1.0 (1)")
+                LabeledContent("Version", value: "2.0 (2)")
                 LabeledContent("Minimum", value: "iOS 26.1")
-                LabeledContent("Datenmodell", value: "lokal & privat")
+                LabeledContent("Datenmodell", value: "lokal • iCloud optional")
             }
         }
         .navigationTitle("Einstellungen")
@@ -116,6 +183,7 @@ struct SettingsView: View {
             alarmService.refreshAuthorization()
             await notificationService.refreshAuthorization()
             eventService.refreshAuthorization()
+            locationService.requestCurrentLocation()
         }
     }
 
@@ -160,4 +228,116 @@ struct SettingsView: View {
     }
     private var eventAccessText: String { hasEventAccess ? "Verbunden" : "Verbinden" }
     private var reminderAccessText: String { hasReminderAccess ? "Verbunden" : "Verbinden" }
+}
+
+struct CustomSoundLibraryView: View {
+    @Environment(AppDataStore.self) private var appStore
+    @Environment(TimerStore.self) private var timerStore
+    @State private var soundStore = CustomSoundStore.shared
+    @State private var showImporter = false
+    @State private var pendingDelete: CustomAlarmSound?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            Section("Mitgeliefert") {
+                ForEach(TimerSoundCatalog.all) { sound in
+                    Button {
+                        SoundPlayer.shared.preview(sound.fileName)
+                    } label: {
+                        Label(sound.title, systemImage: sound.symbol)
+                    }
+                }
+            }
+
+            Section {
+                if soundStore.sounds.isEmpty {
+                    ContentUnavailableView(
+                        "Keine eigenen Töne",
+                        systemImage: "music.note.list",
+                        description: Text("Importiere WAV, AIFF oder CAF mit höchstens 30 Sekunden.")
+                    )
+                }
+                ForEach(soundStore.sounds) { sound in
+                    HStack {
+                        Button {
+                            SoundPlayer.shared.preview(sound.fileName)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(sound.title)
+                                Text(DurationFormat.clock(sound.duration))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Button(role: .destructive) { pendingDelete = sound } label: {
+                            Image(systemName: "trash")
+                        }
+                    }
+                }
+            } header: {
+                Text("Eigene Töne")
+            } footer: {
+                Text("Aktive Timer behalten ihren Ton. Ein verwendeter Ton kann deshalb erst gelöscht werden, wenn der Timer beendet ist.")
+            }
+        }
+        .navigationTitle("Wecktöne")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Importieren", systemImage: "plus") { showImporter = true }
+            }
+        }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.audio],
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard let url = try result.get().first else { return }
+                let sound = try soundStore.importSound(from: url)
+                SoundPlayer.shared.preview(sound.fileName)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+        .alert("Eigenen Ton löschen?", isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { pendingDelete = nil }
+            Button("Löschen", role: .destructive) {
+                guard let sound = pendingDelete else { return }
+                delete(sound)
+                pendingDelete = nil
+            }
+        } message: {
+            Text("Wecker und Presets, die diesen Ton verwenden, werden auf den Systemton umgestellt.")
+        }
+        .alert("Wecktöne", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "Unbekannter Fehler")
+        }
+    }
+
+    private func delete(_ sound: CustomAlarmSound) {
+        if timerStore.activeTimers.contains(where: { $0.soundFile == sound.fileName }) {
+            errorMessage = "Dieser Ton wird gerade von einem aktiven Timer verwendet. Beende den Timer zuerst."
+            return
+        }
+        SoundPlayer.shared.stop()
+        Task {
+            await appStore.replaceSoundReferences(sound.fileName)
+            timerStore.replaceSoundReferences(sound.fileName)
+            if UserDefaults.standard.string(forKey: "defaultSound") == sound.fileName {
+                UserDefaults.standard.set("default", forKey: "defaultSound")
+            }
+            do { try soundStore.delete(sound) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
 }

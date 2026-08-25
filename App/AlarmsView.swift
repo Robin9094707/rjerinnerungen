@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AlarmsView: View {
     @Environment(AppDataStore.self) private var store
@@ -6,6 +7,7 @@ struct AlarmsView: View {
 
     @State private var showNewAlarm = false
     @State private var editingAlarm: AlarmRecord?
+    @State private var pendingDelete: AlarmRecord?
 
     var body: some View {
         ZStack {
@@ -41,6 +43,18 @@ struct AlarmsView: View {
         }
         .sheet(isPresented: $showNewAlarm) { AlarmEditorView() }
         .sheet(item: $editingAlarm) { AlarmEditorView(alarm: $0) }
+        .alert("Wecker löschen?", isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { pendingDelete = nil }
+            Button("Löschen", role: .destructive) {
+                if let alarm = pendingDelete { store.deleteAlarm(alarm.id) }
+                pendingDelete = nil
+            }
+        } message: {
+            Text("Der Wecker wird auch aus AlarmKit, Lock Screen und Dynamic Island entfernt.")
+        }
         .onChange(of: router.showNewAlarm) { _, requested in
             if requested {
                 showNewAlarm = true
@@ -95,7 +109,7 @@ struct AlarmsView: View {
         .contextMenu {
             Button("Bearbeiten", systemImage: "pencil") { editingAlarm = alarm }
             Button("Löschen", systemImage: "trash", role: .destructive) {
-                store.deleteAlarm(alarm.id)
+                pendingDelete = alarm
             }
         }
     }
@@ -111,11 +125,18 @@ struct AlarmEditorView: View {
 
     @State private var alarm: AlarmRecord
     @State private var repeating: Bool
+    @State private var soundStore = CustomSoundStore.shared
+    @State private var showSoundImporter = false
+    @State private var showDiscardConfirmation = false
+    @State private var importError: String?
+
+    private let original: AlarmRecord
 
     init(alarm: AlarmRecord? = nil) {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
         let defaultDate = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: tomorrow) ?? tomorrow
         let value = alarm ?? AlarmRecord(title: "Guten Morgen", fireDate: defaultDate)
+        original = value
         _alarm = State(initialValue: value)
         _repeating = State(initialValue: value.isRepeating)
     }
@@ -146,14 +167,28 @@ struct AlarmEditorView: View {
 
                 Section("Weckverhalten") {
                     Stepper("Snooze: \(alarm.snoozeMinutes) Minuten", value: $alarm.snoozeMinutes, in: 1...30)
+                    Stepper(
+                        alarm.preAlertMinutes == 0
+                            ? "Keine Voranzeige"
+                            : "Voranzeige: \(alarm.preAlertMinutes) Minuten",
+                        value: $alarm.preAlertMinutes,
+                        in: 0...60,
+                        step: 5
+                    )
                     Picker("Ton", selection: $alarm.soundFile) {
-                        ForEach(TimerSoundCatalog.all) { sound in
+                        ForEach(soundStore.catalogItems) { sound in
                             Label(sound.title, systemImage: sound.symbol).tag(sound.fileName)
                         }
                     }
                     Button("Ton testen", systemImage: "speaker.wave.2.fill") {
                         SoundPlayer.shared.preview(alarm.soundFile)
                     }
+                    Button("Eigenen Ton importieren", systemImage: "square.and.arrow.down") {
+                        showSoundImporter = true
+                    }
+                    Text("WAV, AIFF oder CAF • maximal 30 Sekunden. Die Datei wird in Apples Library/Sounds-Bereich der App kopiert.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Farbe") {
@@ -190,19 +225,54 @@ struct AlarmEditorView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button("Abbrechen") {
+                        if alarm != original || repeating != original.isRepeating {
+                            showDiscardConfirmation = true
+                        } else {
+                            dismiss()
+                        }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Sichern") {
                         if !repeating { alarm.weekdays = [] }
                         Task {
-                            await store.upsertAlarm(alarm)
-                            if store.lastError == nil { dismiss() }
+                            let saved = await store.upsertAlarm(alarm)
+                            if saved { dismiss() }
                         }
                     }
                     .buttonStyle(.glassProminent)
                     .disabled(repeating && alarm.weekdays.isEmpty)
                 }
+            }
+            .interactiveDismissDisabled(alarm != original || repeating != original.isRepeating)
+            .fileImporter(
+                isPresented: $showSoundImporter,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: false
+            ) { result in
+                do {
+                    guard let url = try result.get().first else { return }
+                    let imported = try soundStore.importSound(from: url)
+                    alarm.soundFile = imported.fileName
+                    SoundPlayer.shared.preview(imported.fileName)
+                } catch {
+                    importError = error.localizedDescription
+                }
+            }
+            .alert("Änderungen verwerfen?", isPresented: $showDiscardConfirmation) {
+                Button("Weiter bearbeiten", role: .cancel) {}
+                Button("Verwerfen", role: .destructive) { dismiss() }
+            } message: {
+                Text("Nicht gespeicherte Wecker-Einstellungen gehen verloren.")
+            }
+            .alert("Eigener Weckerton", isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button("OK") { importError = nil }
+            } message: {
+                Text(importError ?? "Unbekannter Fehler")
             }
         }
     }

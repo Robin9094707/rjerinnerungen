@@ -205,6 +205,19 @@ final class TimerStore {
         saveTimers()
     }
 
+    func replaceSoundReferences(_ fileName: String, with replacement: String = "default") {
+        for index in timers.indices where timers[index].soundFile == fileName {
+            // Active AlarmKit timers keep their already-copied system sound until
+            // they finish. Deletion is blocked by the UI while one is active.
+            timers[index].soundFile = replacement
+        }
+        for index in presets.indices where presets[index].soundFile == fileName {
+            presets[index].soundFile = replacement
+        }
+        saveTimers()
+        savePresets()
+    }
+
     func addPreset(_ preset: TimerPreset) {
         presets.insert(preset, at: 0)
         savePresets()
@@ -212,6 +225,11 @@ final class TimerStore {
 
     func deletePresets(at offsets: IndexSet) {
         presets.remove(atOffsets: offsets)
+        savePresets()
+    }
+
+    func deletePreset(_ id: UUID) {
+        presets.removeAll { $0.id == id }
         savePresets()
     }
 
@@ -371,6 +389,10 @@ final class TimerStore {
         Haptics.success()
     }
 
+    func reloadFromDisk() {
+        load()
+    }
+
     private func load() {
         timers = AppPersistence.load([TimerRecord].self, from: AppPersistence.timersURL) ?? []
         presets = AppPersistence.load([TimerPreset].self, from: AppPersistence.presetsURL) ?? []
@@ -382,6 +404,7 @@ final class TimerStore {
             try AppPersistence.save(timers, to: AppPersistence.timersURL)
         } catch {
             DebugLogger.shared.log("Save timers error: \(error)")
+            lastError = "Timer konnten nicht gespeichert werden: \(error.localizedDescription)"
         }
     }
 
@@ -390,6 +413,7 @@ final class TimerStore {
             try AppPersistence.save(presets, to: AppPersistence.presetsURL)
         } catch {
             DebugLogger.shared.log("Save presets error: \(error)")
+            lastError = "Timer-Presets konnten nicht gespeichert werden: \(error.localizedDescription)"
         }
     }
 
@@ -398,6 +422,7 @@ final class TimerStore {
             try AppPersistence.save(history, to: AppPersistence.historyURL)
         } catch {
             DebugLogger.shared.log("Save history error: \(error)")
+            lastError = "Timer-Verlauf konnte nicht gespeichert werden: \(error.localizedDescription)"
         }
     }
 }

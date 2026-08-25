@@ -56,7 +56,7 @@ struct MoreView: View {
                             .buttonStyle(.plain)
                         }
 
-                        Text("RJ ZeitZentrale 1.0 • iOS 26.1+")
+                        Text("RJ ZeitZentrale 2.0 • iOS 26.1+")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .padding(.top, 8)
@@ -152,7 +152,7 @@ struct UniversalSearchView: View {
         }
     }
     private var matchingNotes: [NoteItem] {
-        store.notes.filter {
+        store.activeNotes.filter {
             $0.title.localizedCaseInsensitiveContains(query) || $0.body.localizedCaseInsensitiveContains(query)
         }
     }
