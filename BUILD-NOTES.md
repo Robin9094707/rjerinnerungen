@@ -33,6 +33,6 @@ nicht als allgemein verfügbare Funktion vorausgesetzt werden.
 
 ## Workflow
 
-Der finale Workflow ist manuell über `workflow_dispatch` startbar. Während der
-ersten automatisierten Validierung kann zusätzlich ein Push-Trigger vorhanden
-sein; vor der finalen Übergabe wird dieser entfernt.
+Der Workflow ist bewusst manuell über `workflow_dispatch` startbar. Jeder Lauf
+testet die App, baut sie ohne Codesignatur und veröffentlicht die IPA als
+GitHub-Actions-Artefakt.
