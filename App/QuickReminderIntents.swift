@@ -61,9 +61,7 @@ struct QuickReminderIntent: AppIntent {
     @Parameter(title: "Priorität", default: .normal) var priority: ShortcutPriority
 
     static var parameterSummary: some ParameterSummary {
-        let summary: ParameterSummaryString<QuickReminderIntent> =
-            "Erinnere mich an \(.$reminderTitle) in \(.$minutes) Minuten"
-        return Summary(summary)
+        Summary("Erinnere mich an \(\.$reminderTitle) in \(\.$minutes) Minuten")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {

@@ -32,3 +32,10 @@ Nicht standardmäßig als Entitlement eingebettet. Siehe `CriticalAlerts.entitle
 ## APIs
 
 Das Deployment Target bleibt bei iOS 18.0. Liquid Glass wird mit `#available(iOS 26.0, *)` gekapselt. Dadurch bleibt die App auf iOS 18+ lauffähig, während ein Build mit Xcode 26.5 die neue Darstellung nutzen kann.
+
+## Build Fix – 2026-08-25
+
+- `QuickReminderIntents.swift`: App-Intents parameter summary corrected to use proper parameter key-path interpolation (`\(\.$parameter)`).
+- Complete-project release; no patch ZIP required.
+- Swift syntax parse, plist parsing and `project.yml` YAML parsing validated before packaging.
+
