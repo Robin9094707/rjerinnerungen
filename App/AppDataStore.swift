@@ -94,7 +94,10 @@ final class AppDataStore {
         if value.listName.isEmpty { value.listName = "Allgemein" }
         value.notificationLeadTimes = Array(Set(value.notificationLeadTimes.map { max(0, $0) } + [0])).sorted()
         value.snoozeMinutes = min(120, max(1, value.snoozeMinutes))
-        value.recurrenceRule?.interval = max(1, value.recurrenceRule?.interval ?? 1)
+        if var rule = value.recurrenceRule {
+            rule.interval = max(1, rule.interval)
+            value.recurrenceRule = rule
+        }
         value.updatedAt = .now
 
         let previous = reminders
