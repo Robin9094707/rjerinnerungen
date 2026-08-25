@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           APP="$(find "$PWD/.github-derived/Build/Products/Release-iphoneos" \
-            -maxdepth 1 -name 'RJ ZeitZentrale.app' -type d -print -quit)"
+            -maxdepth 1 -name 'RJZeitZentrale.app' -type d -print -quit)"
           if [ -z "$APP" ]; then
             echo "No main .app found."
             exit 1

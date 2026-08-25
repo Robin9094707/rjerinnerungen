@@ -9,7 +9,7 @@ macos-26
 → Unit Tests im iPhone-17-Pro-Max-Simulator (iOS 26.5)
 → Release / iphoneos / generic iOS device
 → CODE_SIGNING_ALLOWED=NO
-→ Payload/RJ ZeitZentrale.app
+→ Payload/RJZeitZentrale.app
 → RJ-ZeitZentrale-unsigned.ipa
 ```
 

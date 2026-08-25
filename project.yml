@@ -32,7 +32,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: eu.rjuhas.zeitzentrale
-        PRODUCT_NAME: RJ ZeitZentrale
+        PRODUCT_NAME: RJZeitZentrale
         PRODUCT_MODULE_NAME: RJZeitZentrale
         INFOPLIST_FILE: App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
