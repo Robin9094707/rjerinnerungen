@@ -70,8 +70,10 @@ actor NotificationService {
             }
         }
 
+        let scheduledRequestCount = requestCount
+        let reminderID = reminder.id.uuidString
         await MainActor.run {
-            DebugLogger.shared.log("Scheduled \(requestCount) notification request(s) for \(reminder.id.uuidString)")
+            DebugLogger.shared.log("Scheduled \(scheduledRequestCount) notification request(s) for \(reminderID)")
         }
     }
 
